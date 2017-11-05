@@ -109,7 +109,7 @@ constexpr FixedPoint operator*(FixedPoint lhs, FixedPoint rhs)
 	uint32_t fract = rhs.m_Number & 0x0000FFFF;
 	p.m_Number = lhs.m_Number * whole;
 
-	for (int i = 15; i > 0; i--)
+	for (int i = 16; i > 0; i--)
 	{
 		uint32_t setBit = (rhs.m_Number & (1 << (i - 1))) >> (i - 1);
 		p.m_Number += (lhs.m_Number / (2 * (1 << (16 - i)))) * setBit;
