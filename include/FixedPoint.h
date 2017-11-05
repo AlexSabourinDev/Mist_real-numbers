@@ -10,10 +10,10 @@ MIST_NAMESPACE
 class FixedPoint
 {
 public:
-	constexpr FixedPoint() : m_Number(0) {};
+	constexpr FixedPoint() : m_Number(0), m_SignBit(0) {};
 
-	constexpr FixedPoint(int num)
-		: m_Number(num << 16) {}
+	FixedPoint(int num)
+		: m_Number(abs(num) << 16), m_SignBit(num < 0) {}
 
 	FixedPoint(float num);
 
@@ -22,6 +22,9 @@ public:
 	friend constexpr FixedPoint operator-(FixedPoint lhs, FixedPoint rhs);
 	friend constexpr FixedPoint operator*(FixedPoint lhs, FixedPoint rhs);
 	friend constexpr FixedPoint operator/(FixedPoint lhs, FixedPoint rhs);
+
+	friend constexpr FixedPoint Abs(FixedPoint p);
+	friend constexpr bool Signed(FixedPoint p);
 
 	friend constexpr bool operator<(FixedPoint lhs, FixedPoint rhs);
 	friend constexpr bool operator>(FixedPoint lhs, FixedPoint rhs);
@@ -38,8 +41,8 @@ public:
 
 	friend std::string ToString(FixedPoint point, int decimalCount = 4);
 
-private:
-	uint32_t m_Number;
+	uint32_t m_Number : 31;
+	uint32_t m_SignBit : 1;
 };
 
 
@@ -47,10 +50,13 @@ private:
 
 FixedPoint::FixedPoint(float num)
 {
-	uint32_t whole = (uint32_t)floor(num) << 16;
+	m_SignBit = num < 0.0f;
+
+	float absolute = abs(num);
+	uint32_t whole = (uint32_t)floor(absolute) << 16;
 
 	uint32_t fract = 0;
-	float remainder = num - floor(num);
+	float remainder = absolute - floor(absolute);
 	for (int i = 16; i > 0; i--)
 	{
 		remainder *= 2;
@@ -91,20 +97,48 @@ FixedPoint FixedPoint::operator/=(FixedPoint rhs)
 constexpr FixedPoint operator+(FixedPoint lhs, FixedPoint rhs)
 {
 	FixedPoint p;
-	p.m_Number = lhs.m_Number + rhs.m_Number;
+
+	if ((rhs.m_SignBit != lhs.m_SignBit) && rhs.m_Number > lhs.m_Number)
+	{
+		uint32_t leftover = rhs.m_Number - lhs.m_Number;
+		p.m_Number = leftover;
+		p.m_SignBit = ~lhs.m_SignBit;
+	}
+	else
+	{
+		p.m_Number = lhs.m_SignBit ^ rhs.m_SignBit ? lhs.m_Number - rhs.m_Number : lhs.m_Number + rhs.m_Number;
+		p.m_SignBit = lhs.m_Number >= rhs.m_Number ? lhs.m_SignBit : rhs.m_SignBit;
+	}
+
 	return p;
 }
 
 constexpr FixedPoint operator-(FixedPoint lhs, FixedPoint rhs)
 {
 	FixedPoint p;
-	p.m_Number = lhs.m_Number - rhs.m_Number;
+
+	if ((rhs.m_SignBit == lhs.m_SignBit) && rhs.m_Number > lhs.m_Number)
+	{
+		uint32_t leftover = rhs.m_Number - lhs.m_Number;
+		p.m_Number = leftover;
+		p.m_SignBit = ~lhs.m_SignBit;
+	}
+	else
+	{
+		p.m_Number = lhs.m_SignBit ^ rhs.m_SignBit ? lhs.m_Number + rhs.m_Number : lhs.m_Number - rhs.m_Number;
+		p.m_SignBit = lhs.m_Number >= rhs.m_Number ? lhs.m_SignBit : ~rhs.m_SignBit;
+	}
+
 	return p;
 }
 
 constexpr FixedPoint operator*(FixedPoint lhs, FixedPoint rhs)
 {
 	FixedPoint p;
+
+	bool lhsSigned = Signed(lhs);
+	bool rhsSigned = Signed(rhs);
+
 	uint32_t whole = rhs.m_Number >> 16;
 	uint32_t fract = rhs.m_Number & 0x0000FFFF;
 	p.m_Number = lhs.m_Number * whole;
@@ -115,6 +149,8 @@ constexpr FixedPoint operator*(FixedPoint lhs, FixedPoint rhs)
 		p.m_Number += (lhs.m_Number / (2 * (1 << (16 - i)))) * setBit;
 	}
 
+	p.m_SignBit = lhsSigned ^ rhsSigned;
+
 	return p;
 }
 
@@ -122,34 +158,54 @@ constexpr FixedPoint operator/(FixedPoint lhs, FixedPoint rhs)
 {
 	FixedPoint p;
 
+	bool lhsSigned = Signed(lhs);
+	bool rhsSigned = Signed(rhs);
+
 	uint64_t left = (uint64_t)lhs.m_Number << 16;
 	uint64_t right = (uint64_t)rhs.m_Number;
 
 	p.m_Number = (uint32_t)(left / right);
 
+	p.m_SignBit = lhsSigned ^ rhsSigned;
+
 	return p;
+}
+
+constexpr FixedPoint Abs(FixedPoint p)
+{
+	p.m_SignBit = 0;
+	return p;
+}
+
+constexpr bool Signed(FixedPoint p)
+{
+	return p.m_SignBit;
 }
 
 // -Comparison operators-
 
 constexpr bool operator<(FixedPoint lhs, FixedPoint rhs)
 {
+	if (Signed(lhs) && !Signed(rhs)) return true;
+	if (Signed(lhs) && Signed(rhs)) return lhs.m_Number > rhs.m_Number;
 	return lhs.m_Number < rhs.m_Number;
 }
 
 constexpr bool operator>(FixedPoint lhs, FixedPoint rhs)
 {
+	if (!Signed(lhs) && Signed(rhs)) return true;
+	if (Signed(lhs) && Signed(rhs)) return lhs.m_Number < rhs.m_Number;
 	return lhs.m_Number > rhs.m_Number;
 }
 
 constexpr bool operator<=(FixedPoint lhs, FixedPoint rhs)
 {
-	return lhs.m_Number <= rhs.m_Number;
+	return !(lhs > rhs);
 }
 
 constexpr bool operator>=(FixedPoint lhs, FixedPoint rhs)
 {
-	return lhs.m_Number >= rhs.m_Number;
+	return !(lhs < rhs);
 }
 
 constexpr bool operator==(FixedPoint lhs, FixedPoint rhs)
@@ -169,7 +225,12 @@ std::string ToString(FixedPoint point, int decimalCount)
 	uint32_t fraction = (uint32_t)(point.m_Number & 0x0000FFFF);
 	uint32_t whole = (uint32_t)(point.m_Number >> 16);
 
-	whole = whole & (~(1 << 16));
+	std::string print;
+
+	if (Signed(point))
+	{
+		print = "-";
+	}
 
 	std::string fractionString;
 	if (fraction == 0)
@@ -184,9 +245,9 @@ std::string ToString(FixedPoint point, int decimalCount)
 		fraction &= ((1 << 16) - 1);
 	}
 
-	std::string print = std::to_string(whole) + "." + fractionString;
+	print += std::to_string(whole) + "." + fractionString;
 
-	return std::to_string(whole) + "." + fractionString;
+	return print;
 }
 
 MIST_NAMESPACE_END
