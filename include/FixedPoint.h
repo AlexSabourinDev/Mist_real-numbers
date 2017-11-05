@@ -23,6 +23,12 @@ public:
 	friend constexpr FixedPoint operator*(FixedPoint lhs, FixedPoint rhs);
 	friend constexpr FixedPoint operator/(FixedPoint lhs, FixedPoint rhs);
 
+	friend constexpr bool operator<(FixedPoint lhs, FixedPoint rhs);
+	friend constexpr bool operator>(FixedPoint lhs, FixedPoint rhs);
+	friend constexpr bool operator<=(FixedPoint lhs, FixedPoint rhs);
+	friend constexpr bool operator>=(FixedPoint lhs, FixedPoint rhs);
+	friend constexpr bool operator==(FixedPoint lhs, FixedPoint rhs);
+	friend constexpr bool operator!=(FixedPoint lhs, FixedPoint rhs);
 
 	FixedPoint operator+=(FixedPoint rhs);
 	FixedPoint operator-=(FixedPoint rhs);
@@ -80,7 +86,7 @@ FixedPoint FixedPoint::operator/=(FixedPoint rhs)
 	return *this;
 }
 
-// -Friends-
+// -Modification operators-
 
 constexpr FixedPoint operator+(FixedPoint lhs, FixedPoint rhs)
 {
@@ -103,7 +109,7 @@ constexpr FixedPoint operator*(FixedPoint lhs, FixedPoint rhs)
 	uint32_t fract = rhs.m_Number & 0x0000FFFF;
 	p.m_Number = lhs.m_Number * whole;
 
-	for (int i = 16; i > 0; i--)
+	for (int i = 15; i > 0; i--)
 	{
 		uint32_t setBit = (rhs.m_Number & (1 << (i - 1))) >> (i - 1);
 		p.m_Number += (lhs.m_Number / (2 * (1 << (16 - i)))) * setBit;
@@ -124,10 +130,46 @@ constexpr FixedPoint operator/(FixedPoint lhs, FixedPoint rhs)
 	return p;
 }
 
+// -Comparison operators-
+
+constexpr bool operator<(FixedPoint lhs, FixedPoint rhs)
+{
+	return lhs.m_Number < rhs.m_Number;
+}
+
+constexpr bool operator>(FixedPoint lhs, FixedPoint rhs)
+{
+	return lhs.m_Number > rhs.m_Number;
+}
+
+constexpr bool operator<=(FixedPoint lhs, FixedPoint rhs)
+{
+	return lhs.m_Number <= rhs.m_Number;
+}
+
+constexpr bool operator>=(FixedPoint lhs, FixedPoint rhs)
+{
+	return lhs.m_Number >= rhs.m_Number;
+}
+
+constexpr bool operator==(FixedPoint lhs, FixedPoint rhs)
+{
+	return lhs.m_Number == rhs.m_Number;
+}
+
+constexpr bool operator!=(FixedPoint lhs, FixedPoint rhs)
+{
+	return lhs.m_Number != rhs.m_Number;
+}
+
+// -Printing-
+
 std::string ToString(FixedPoint point, int decimalCount)
 {
 	uint32_t fraction = (uint32_t)(point.m_Number & 0x0000FFFF);
 	uint32_t whole = (uint32_t)(point.m_Number >> 16);
+
+	whole = whole & (~(1 << 16));
 
 	std::string fractionString;
 	if (fraction == 0)
@@ -141,6 +183,8 @@ std::string ToString(FixedPoint point, int decimalCount)
 		fractionString += '0' + (fraction >> 16);
 		fraction &= ((1 << 16) - 1);
 	}
+
+	std::string print = std::to_string(whole) + "." + fractionString;
 
 	return std::to_string(whole) + "." + fractionString;
 }
