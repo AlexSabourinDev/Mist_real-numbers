@@ -139,16 +139,10 @@ constexpr FixedPoint operator*(FixedPoint lhs, FixedPoint rhs)
 	bool lhsSigned = Signed(lhs);
 	bool rhsSigned = Signed(rhs);
 
-	uint32_t whole = rhs.m_Number >> 16;
-	uint32_t fract = rhs.m_Number & 0x0000FFFF;
-	p.m_Number = lhs.m_Number * whole;
+	uint64_t left = lhs.m_Number;
+	uint64_t right = rhs.m_Number;
 
-	for (int i = 16; i > 0; i--)
-	{
-		uint32_t setBit = (rhs.m_Number & (1 << (i - 1))) >> (i - 1);
-		p.m_Number += (lhs.m_Number / (2 * (1 << (16 - i)))) * setBit;
-	}
-
+	p.m_Number = (uint32_t)((left * right) >> 16);
 	p.m_SignBit = lhsSigned ^ rhsSigned;
 
 	return p;
